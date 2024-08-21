@@ -69,7 +69,7 @@ lighting software.  (This has the added advantage of keeping your Art-Net traffi
 3. Install Python 3.10 or later on your system according to your OS's instructions.
 4. Install the required Python libraries using pip:
 ```
-pip install numpy websocket-client remi
+pip install -r requirements.txt
 ```
 5. Run Flamecaster from the command line:
 ```

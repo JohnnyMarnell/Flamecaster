@@ -5,6 +5,7 @@ own thread, so any I/O waits or errors will not interfere with other operations.
 We expect that Pixelblaze connections may be intermittent and unreliable, so we
 need to handle errors and reconnections gracefully.
 """
+
 import logging
 import threading
 from threading import Thread
@@ -45,10 +46,10 @@ class DisplayDevice:
     def __init__(self, device, config):
 
         # set up device information record
-        self.ip = getParam(device, 'ip', "")
-        self.name = getParam(device, 'name', "<none>")
-        self.pixelCount = getParam(device, 'pixelCount', 0)
-        s = getParam(device, 'deviceStyle', "pixels")
+        self.ip = getParam(device, "ip", "")
+        self.name = getParam(device, "name", "<none>")
+        self.pixelCount = getParam(device, "pixelCount", 0)
+        s = getParam(device, "deviceStyle", "pixels")
         if s == "pixels":
             self.deviceStyle = self.DeviceStyles.Pixels
             self.packetHandler = self.process_pixel_data
@@ -59,7 +60,7 @@ class DisplayDevice:
 
         # both the device and the system configuration can specify a maxFps.
         # We take the lowest of the two.
-        self.maxFps = getParam(device, 'maxFps', 1000)
+        self.maxFps = getParam(device, "maxFps", 1000)
         self.maxFps = min(config["maxFps"], self.maxFps)
         self.sec_per_frame = 1 / self.maxFps
         # account for overhead in the frame timer
@@ -77,7 +78,9 @@ class DisplayDevice:
         self.frame_timer = 0
         thread.start()
 
-    def process_packet(self, dmxPixels: bytearray, startChannel: int, destPixel: int, count: int):
+    def process_packet(
+        self, dmxPixels: bytearray, startChannel: int, destPixel: int, count: int
+    ):
         """
         Process a packet of DMX data.  This function is called by the main
         ArtnetServer thread when a packet is received.  It will process the
@@ -90,7 +93,9 @@ class DisplayDevice:
         """
         self.packetHandler(dmxPixels, startChannel, destPixel, count)
 
-    def process_channel_data(self, dmxPixels: bytearray, startChannel: int, destChannel: int, count: int):
+    def process_channel_data(
+        self, dmxPixels: bytearray, startChannel: int, destChannel: int, count: int
+    ):
         self.packets_in += 1
         self.pixelsReceived += count
         self.pixelsUpdated += count
@@ -106,7 +111,9 @@ class DisplayDevice:
             chNum += 1
             index += 1
 
-    def process_pixel_data(self, dmxPixels: bytearray, startChannel: int, destPixel: int, count: int):
+    def process_pixel_data(
+        self, dmxPixels: bytearray, startChannel: int, destPixel: int, count: int
+    ):
         """
         Pack RGB color data into a single 32-bit fixed point float for
         compact transmission to a Pixelblaze
@@ -115,6 +122,10 @@ class DisplayDevice:
         :param destPixel: index of first pixel in destination array
         :param count: number of pixels to process
         """
+
+        if self.packets_in == 1:
+            logging.debug(f"{self.name} is recv packets and sending pixels")
+
         self.packets_in += 1
         self.pixelsReceived += count
         self.pixelsUpdated += count
@@ -128,8 +139,11 @@ class DisplayDevice:
         # the result by 256 to produce a float.
         maxIndex = min(self.pixelCount, destPixel + count)
         while pixNum < maxIndex:
-            self.pixels[pixNum] = ((dmxPixels[index] << 16) | (dmxPixels[index + 1] << 8) | dmxPixels[
-                index + 2]) / 256.0
+            self.pixels[pixNum] = (
+                (dmxPixels[index] << 16)
+                | (dmxPixels[index + 1] << 8)
+                | dmxPixels[index + 2]
+            ) / 256.0
 
             # The Pixelblaze uses a 16.16 fixed point, two's complement representation for pixel data.
             # If the value is greater than 32767, we need to subtract 65536 to convert it to a negative number
@@ -162,7 +176,10 @@ class DisplayDevice:
             # go to great lengths to get rid of the spaces, zeros and spurious digits python
             # *really* wants you to have.  We want to send out as few bytes of data as possible.
             self.pb.ws.send(
-                "{\"setVars\":{\"pixels\":[" + ",".join(f"{x:5g}".lstrip(" ") for x in self.pixels) + "]}}")
+                '{"setVars":{"pixels":['
+                + ",".join(f"{x:5g}".lstrip(" ") for x in self.pixels)
+                + "]}}"
+            )
             self.packets_out += 1
             self.pixelsUpdated = 0
 
@@ -176,7 +193,10 @@ class DisplayDevice:
             # *really* wants you to have.  We want to send out as few bytes of data as possible.
             # self.pb.ws.send(
             self.pb.ws.send(
-                "{\"setVars\":{\"channels\":[" + ",".join(f"{x:d}".lstrip(" ") for x in self.channelData) + "]}}")
+                '{"setVars":{"channels":['
+                + ",".join(f"{x:d}".lstrip(" ") for x in self.channelData)
+                + "]}}"
+            )
 
             self.packets_out += 1
             self.pixelsUpdated = 0
@@ -193,8 +213,16 @@ class DisplayDevice:
             is_connected = "true" if self.pb.is_connected() else "false"
         inP = round(self.packets_in / et, 1)
         outF = round(self.packets_out / et, 1)
-        return json.dumps({"name": self.name, "inPps": inP, "outFps": outF,
-                           "ip": self.ip, "maxFps": self.maxFps, "connected": is_connected})
+        return json.dumps(
+            {
+                "name": self.name,
+                "inPps": inP,
+                "outFps": outF,
+                "ip": self.ip,
+                "maxFps": self.maxFps,
+                "connected": is_connected,
+            }
+        )
 
     def resetCounters(self):
         """
@@ -216,7 +244,9 @@ class DisplayDevice:
         self.pb.setSendPreviewFrames(False)
 
         logging.debug("Pixelblaze: %s (%s) initializing." % (self.name, self.ip))
-        logging.debug("Connection is %s" % ("open" if self.pb.is_connected() else "NOT open"))
+        logging.debug(
+            "Connection is %s" % ("open" if self.pb.is_connected() else "NOT open")
+        )
 
         frame_timer = time.time()
 
@@ -246,7 +276,9 @@ class DisplayDevice:
             # connection error of some sort, and we'll need to keep trying to reconnect at intervals.
             # TODO - add an exponential backoff timer to the reconnect attempts?
             except Exception as e:
-                logging.debug("Pixelblaze %s (%s) stalled or disconnected." % (self.name, self.ip))
+                logging.debug(
+                    "Pixelblaze %s (%s) stalled or disconnected." % (self.name, self.ip)
+                )
                 logging.debug("Exception: %s" % str(e))
                 self.pb.close()
                 pass
@@ -258,7 +290,21 @@ class DisplayDevice:
         self.pb = None
 
     def __str__(self):
-        return ("DisplayDevice: name: " + self.name + " ip: " + self.ip + " pixelCount: " +
-                str(self.pixelCount) + " maxFps: " + str(self.maxFps) + " pixelsReceived: " +
-                str(self.pixelsReceived) + " packets_in: " + str(self.packets_in) + " packets_out: " +
-                str(self.packets_out) + " run_flag: " + str(self.run_flag.is_set()))
+        return (
+            "DisplayDevice: name: "
+            + self.name
+            + " ip: "
+            + self.ip
+            + " pixelCount: "
+            + str(self.pixelCount)
+            + " maxFps: "
+            + str(self.maxFps)
+            + " pixelsReceived: "
+            + str(self.pixelsReceived)
+            + " packets_in: "
+            + str(self.packets_in)
+            + " packets_out: "
+            + str(self.packets_out)
+            + " run_flag: "
+            + str(self.run_flag.is_set())
+        )

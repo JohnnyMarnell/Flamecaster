@@ -46,6 +46,7 @@ class Pixelblaze:
     This is a lightweight version of the pixelblaze-client python library, with only the functionality
     needed for this Artnet proxy project.
     """
+
     # --- PRIVATE DATA
     default_recv_timeout = 1
     default_open_interval = 2000  # milliseconds
@@ -114,7 +115,7 @@ class Pixelblaze:
 
     def open(self):
         """
-        Opens a websocket connection to the Pixelblaze.  
+        Opens a websocket connection to the Pixelblaze.
         """
         if self.connected is True:
             return
@@ -125,8 +126,14 @@ class Pixelblaze:
             uri = "ws://" + self.ipAddress + ":81"
 
             try:
-                self.ws = websocket.create_connection(uri, skip_utf8_validation=True, sockopt=(
-                    (socket.SOL_SOCKET, socket.SO_REUSEADDR, 1), (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),))
+                self.ws = websocket.create_connection(
+                    uri,
+                    skip_utf8_validation=True,
+                    sockopt=(
+                        (socket.SOL_SOCKET, socket.SO_REUSEADDR, 1),
+                        (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+                    ),
+                )
 
             except websocket._exceptions.WebSocketConnectionClosedException:
                 raise
@@ -151,8 +158,9 @@ class Pixelblaze:
 
     class MessageTypes(IntEnum):
         """Types of binary messages sent and received by a Pixelblaze.  The first byte of a binary
-          frame contains the message type.
+        frame contains the message type.
         """
+
         putSourceCode = 1  # from client to PB
         putByteCode = 3  # from client to PB
         previewImage = 4  # from client to PB
@@ -167,14 +175,17 @@ class Pixelblaze:
 
     class FrameTypes(Flag):
         """Continuation flags for messages sent and received by a Pixelblaze.
-           The second byte of a binary frame tells whether this packet is part of a set.
+        The second byte of a binary frame tells whether this packet is part of a set.
         """
+
         frameNone = 0
         frameFirst = 1
         frameMiddle = 2
         frameLast = 4
 
-    def wsReceive(self, *, binaryMessageType: MessageTypes = None) -> Union[str, bytes, None]:
+    def wsReceive(
+        self, *, binaryMessageType: MessageTypes = None
+    ) -> Union[str, bytes, None]:
         """Wait for a message of a particular type from the Pixelblaze.
 
         Args:
@@ -242,7 +253,9 @@ class Pixelblaze:
         """
         return self.wsSendJson({"ping": True})
 
-    def wsSendJson(self, command: dict, *, expectedResponse=None) -> Union[str, bytes, None]:
+    def wsSendJson(
+        self, command: dict, *, expectedResponse=None
+    ) -> Union[str, bytes, None]:
         """Send a JSON-formatted command to the Pixelblaze, and optionally wait for a suitable response.
 
         Args:
@@ -258,7 +271,11 @@ class Pixelblaze:
         while True:
             try:
                 self.open()  # make sure it's open, even if it closed while we were doing other things.
-                self.ws.send(json.dumps(command, indent=None, separators=(',', ':')).encode("utf-8"))
+                self.ws.send(
+                    json.dumps(command, indent=None, separators=(",", ":")).encode(
+                        "utf-8"
+                    )
+                )
 
                 if expectedResponse is None:
                     return None
@@ -272,7 +289,9 @@ class Pixelblaze:
                     # Loop until we get the right text response.
                     if type(expectedResponse) is str:
                         if expectedResponse == "activeProgram":
-                            response = self.wsReceive(binaryMessageType=self.MessageTypes.specialConfig)
+                            response = self.wsReceive(
+                                binaryMessageType=self.MessageTypes.specialConfig
+                            )
                         else:
                             response = self.wsReceive(binaryMessageType=None)
                         if response is None:
@@ -303,7 +322,13 @@ class Pixelblaze:
                 self.close()
                 self.open()  # try reopening  # raise
 
-    def wsSendBinary(self, binaryMessageType: MessageTypes, blob: bytes, *, expectedResponse: str = None):
+    def wsSendBinary(
+        self,
+        binaryMessageType: MessageTypes,
+        blob: bytes,
+        *,
+        expectedResponse: str = None,
+    ):
         """Send a binary command to the Pixelblaze, and optionally wait for a suitable response.
 
         Args:
@@ -341,7 +366,7 @@ class Pixelblaze:
                     frameHeader[1] = frameFlag.value
 
                     # Send the packet.
-                    self.ws.send_binary(bytes(frameHeader) + blob[i:i + maxFrameSize])
+                    self.ws.send_binary(bytes(frameHeader) + blob[i : i + maxFrameSize])
 
                     # If the pipe broke while we were sending, restart from the beginning.
                     if self.connectionBroken:
@@ -358,7 +383,9 @@ class Pixelblaze:
                                 break
                         # Or the right binary response.
                         elif type(expectedResponse) is self.MessageTypes:
-                            response = self.wsReceive(binaryMessageType=expectedResponse)
+                            response = self.wsReceive(
+                                binaryMessageType=expectedResponse
+                            )
                             break
                 # Now that we've sent all the chunks, return the last status received.
                 return response
@@ -412,7 +439,9 @@ class Pixelblaze:
         ShuffleAll = 1
         Playlist = 2
 
-    def setSequencerMode(self, sequencerMode: SequencerModes, *, saveToFlash: bool = False):
+    def setSequencerMode(
+        self, sequencerMode: SequencerModes, *, saveToFlash: bool = False
+    ):
         """Sets the sequencer mode to one of the available sequencerModes (Off, ShuffleAll, or Playlist).
 
         Args:
@@ -420,7 +449,9 @@ class Pixelblaze:
             saveToFlash (bool, optional): If True, the setting is stored in Flash memory;
             otherwise the value reverts on a reboot. Defaults to False.
         """
-        self.wsSendJson({"sequencerMode": sequencerMode, "save": saveToFlash}, expectedResponse=None)
+        self.wsSendJson(
+            {"sequencerMode": sequencerMode, "save": saveToFlash}, expectedResponse=None
+        )
 
     def setSequencerState(self, sequencerState: bool):
         """Set the run state of the sequencer.
@@ -438,7 +469,9 @@ class Pixelblaze:
             dict: A dictionary containing all the variables exported by the active pattern, with variableName
             as the key and variableValue as the value.
         """
-        return json.loads(self.wsSendJson({"getVars": True}, expectedResponse="vars")).get('vars')
+        return json.loads(
+            self.wsSendJson({"getVars": True}, expectedResponse="vars")
+        ).get("vars")
 
     def setActiveVariables(self, dictVariables: dict):
         """Sets the values of one or more variables exported by the current pattern.
@@ -453,8 +486,7 @@ class Pixelblaze:
 
     # --- PATTERNS tab: SAVED PATTERNS section: convenience functions
     def requestConfigSequencer(self):
-        """Retrieves the Sequencer state when the Pixelblaze gets around to it
-        """
+        """Retrieves the Sequencer state when the Pixelblaze gets around to it"""
         self.requestConfigSettings()
 
     def getActivePattern(self) -> str:
@@ -463,7 +495,11 @@ class Pixelblaze:
         Returns:
             str: The patternId of the current pattern, if any; otherwise an empty string.
         """
-        return self.latestSequencer.get('activeProgram').get('activeProgramId', "")
+        if self.latestSequencer:
+            activeProgram = self.latestSequencer.get("activeProgram")
+            if activeProgram:
+                return activeProgram.get("activeProgramId", "")
+        return "No active program!"
 
     def sendPatternToRenderer(self, bytecode: bytes, controls=None):
         """Sends a blob of bytecode and a JSON dictionary of UI controls to the Renderer.
@@ -476,8 +512,12 @@ class Pixelblaze:
         """
         if controls is None:
             controls = {}
-        self.wsSendJson({"pause": True, "setCode": {"size": len(bytecode)}}, expectedResponse="ack")
-        self.wsSendBinary(self.MessageTypes.putByteCode, bytecode, expectedResponse="ack")
+        self.wsSendJson(
+            {"pause": True, "setCode": {"size": len(bytecode)}}, expectedResponse="ack"
+        )
+        self.wsSendBinary(
+            self.MessageTypes.putByteCode, bytecode, expectedResponse="ack"
+        )
         self.wsSendJson({"setControls": controls}, expectedResponse="ack")
         self.wsSendJson({"pause": False}, expectedResponse="ack")
 
@@ -492,7 +532,7 @@ class Pixelblaze:
         Returns:
             int: The number of LEDs connected to the Pixelblaze.
         """
-        return self.latestConfig.get('pixelCount', None)
+        return self.latestConfig.get("pixelCount", None)
 
     def pauseRenderer(self, doPause: bool):
         """Pause rendering. Lasts until unpause() is called or the Pixelblaze is reset.
